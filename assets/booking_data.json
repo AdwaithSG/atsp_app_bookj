@@ -1,0 +1,41 @@
+{
+    "fromLocation": "Downtown",
+    "toLocation": "Airport Terminal",
+    "parkingSlot": "B12",
+    "bookingTime": "2:30 PM - 4:30 PM",
+    "parkingName": "Downtown Secure Parking",
+    "parkingAddress": "123 Main Street, City Center",
+    "parkingRating": 4.7,
+    "vehicleOptions": [
+      {
+        "brand": "Mercedes-Benz",
+        "model": "CL63 AMG",
+        "type": "Long coupe",
+        "isDefault": true
+      },
+      {
+        "brand": "BMW",
+        "model": "M4 Competition",
+        "type": "Sports coupe",
+        "isDefault": false
+      },
+      {
+        "brand": "Audi",
+        "model": "RS7",
+        "type": "Sportback",
+        "isDefault": false
+      },
+      {
+        "brand": "Tesla",
+        "model": "Model S",
+        "type": "Electric sedan",
+        "isDefault": false
+      },
+      {
+        "brand": "Maruti",
+        "model": "Vitara Brezza",
+        "type": "SUV",
+        "isDefault": false
+      }
+    ]
+  }

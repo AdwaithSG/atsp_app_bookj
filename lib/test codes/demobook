@@ -1,0 +1,601 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+
+class BookingPage extends StatefulWidget {
+  final String fromLocation;
+  final String toLocation;
+  final String parkingSlot;
+  final String bookingTime;
+  final String vehicleBrand;
+  final String vehicleModel;
+  final String vehicleType;
+  final String pickupLocation;
+  
+  // Adding coordinates for map display
+  final LatLng fromCoordinates;
+  final LatLng toCoordinates;
+
+  const BookingPage({
+    super.key,
+    this.fromLocation = "Current Location",
+    this.toLocation = "Destination",
+    this.parkingSlot = "A1",
+    this.bookingTime = "10:30 AM - 12:30 PM",
+    this.vehicleBrand = "Mercedes-Benz",
+    this.vehicleModel = "CL63 AMG",
+    this.vehicleType = "Long coupe",
+    this.pickupLocation = "John F. Kennedy International Airport",
+    this.fromCoordinates = const LatLng(40.6413, -73.7781), // JFK Airport coordinates as default
+    this.toCoordinates = const LatLng(40.7128, -74.0060), // NYC coordinates as default
+  });
+
+  @override
+  State<BookingPage> createState() => _BookingPageState();
+}
+
+class _BookingPageState extends State<BookingPage> with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  late Animation<double> _slideAnimation;
+  final double _maxSlideHeight = 0.75; // 75% of screen height
+  final MapController _mapController = MapController();
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    
+    _slideAnimation = Tween<double>(
+      begin: 0.0,
+      end: _maxSlideHeight,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeOutBack,
+    ));
+    
+    // Start animation after a short delay
+    Future.delayed(const Duration(milliseconds: 200), () {
+      _animationController.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey.shade100,
+      appBar: AppBar(
+        title: const Text("Booking Confirmation", 
+          style: TextStyle(fontWeight: FontWeight.w500, color: Colors.black87)),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.black87),
+      ),
+      body: Stack(
+        children: [
+          // Map view as background
+          _buildMapView(),
+          
+          // Sliding panel
+          AnimatedBuilder(
+            animation: _slideAnimation,
+            builder: (context, child) {
+              return Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: MediaQuery.of(context).size.height * _slideAnimation.value,
+                child: GestureDetector(
+                  onVerticalDragUpdate: (details) {
+                    // Calculate new animation value based on drag
+                    double newValue = _slideAnimation.value - (details.delta.dy / MediaQuery.of(context).size.height);
+                    // Clamp the value between 0 and maxSlideHeight
+                    newValue = newValue.clamp(0.0, _maxSlideHeight);
+                    _animationController.value = newValue / _maxSlideHeight;
+                  },
+                  onVerticalDragEnd: (details) {
+                    // Snap to fully open or closed based on velocity and position
+                    if (details.velocity.pixelsPerSecond.dy > 200 || _slideAnimation.value < _maxSlideHeight / 2) {
+                      _animationController.reverse();
+                    } else {
+                      _animationController.forward();
+                    }
+                  },
+                  child: child,
+                ),
+              );
+            },
+            child: _buildSlidingPanel(context),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildMapView() {
+    // Calculate center point between from and to locations
+    final centerLat = (widget.fromCoordinates.latitude + widget.toCoordinates.latitude) / 2;
+    final centerLng = (widget.fromCoordinates.longitude + widget.toCoordinates.longitude) / 2;
+    final center = LatLng(centerLat, centerLng);
+    
+    // Calculate appropriate zoom level
+    final distance = const Distance().distance(widget.fromCoordinates, widget.toCoordinates);
+    final zoom = _calculateZoomLevel(distance);
+    
+    return FlutterMap(
+      mapController: _mapController,
+      options: MapOptions(
+        center: center,
+        zoom: zoom,
+        minZoom: 5,
+        maxZoom: 18,
+        interactiveFlags: InteractiveFlag.all,
+      ),
+      children: [
+        TileLayer(
+          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          userAgentPackageName: 'com.example.app',
+          attributionBuilder: (_) {
+            return const Text(
+              '© OpenStreetMap contributors',
+              style: TextStyle(fontSize: 10),
+            );
+          },
+        ),
+        // Route line between points
+        PolylineLayer(
+          polylines: [
+            Polyline(
+              points: [widget.fromCoordinates, widget.toCoordinates],
+              strokeWidth: 4.0,
+              color: Colors.deepPurple.shade400,
+            ),
+          ],
+        ),
+        // Markers for start and destination
+        MarkerLayer(
+          markers: [
+            // Start marker
+            Marker(
+              point: widget.fromCoordinates,
+              width: 40,
+              height: 40,
+              builder: (context) => _buildMarker(true),
+            ),
+            // Destination marker
+            Marker(
+              point: widget.toCoordinates,
+              width: 40,
+              height: 40,
+              builder: (context) => _buildMarker(false),
+            ),
+          ],
+        ),
+        ColorFilterLayer(
+          colorFilter: const ColorFilter.mode(
+            Color.fromRGBO(0, 0, 0, 0.1),
+            BlendMode.srcOver,
+          ),
+        ),
+      ],
+    );
+  }
+  
+  Widget _buildMarker(bool isStart) {
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: isStart ? Colors.deepPurple.shade400 : Colors.deepPurple.shade600,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 6,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: Icon(
+        isStart ? Icons.trip_origin : Icons.location_on,
+        color: Colors.white,
+        size: 24,
+      ),
+    );
+  }
+  
+  // Calculate zoom level based on distance
+  double _calculateZoomLevel(double distance) {
+    if (distance > 50000) return 8.0;
+    if (distance > 10000) return 10.0;
+    if (distance > 5000) return 11.0;
+    if (distance > 1000) return 12.0;
+    return 13.0;
+  }
+
+  Widget _buildSlidingPanel(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(30),
+          topRight: Radius.circular(30),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 12,
+            spreadRadius: 0,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Drag handle
+          Container(
+            margin: const EdgeInsets.only(top: 12, bottom: 8),
+            width: 40,
+            height: 5,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          // Panel content
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                children: [
+                  // Route display section
+                  _buildCard([
+                    _buildRouteDisplay(),
+                    const SizedBox(height: 20),
+                    _buildDivider(),
+                    const SizedBox(height: 16),
+                    _buildDetailsSingleLine(),
+                  ]),
+                  
+                  const SizedBox(height: 20),
+                  
+                  // Vehicle details section
+                  _buildCard([
+                    _buildInfoRow(
+                      Icons.directions_car,
+                      widget.vehicleBrand,
+                      trailing: Text(
+                        widget.vehicleModel,
+                        style: TextStyle(
+                          color: Colors.deepPurple.shade600,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 4),
+                    
+                    Padding(
+                      padding: const EdgeInsets.only(left: 30),
+                      child: Text(
+                        widget.vehicleType,
+                        style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 16),
+                    _buildDivider(),
+                    const SizedBox(height: 16),
+                    
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Pick-up",
+                          style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+                        ),
+                        const SizedBox(height: 4),
+                        _buildInfoRow(Icons.location_on, widget.pickupLocation),
+                      ],
+                    ),
+                    
+                    const SizedBox(height: 16),
+                    _buildDivider(),
+                    const SizedBox(height: 16),
+                    
+                    _buildInfoRow(
+                      Icons.event_available,
+                      "Available Now",
+                      trailing: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade100,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          "Ready",
+                          style: TextStyle(
+                            color: Colors.green.shade800,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 16),
+                    _buildInfoRow(Icons.star, "4.85", trailing: Row(
+                      children: List.generate(5, (index) {
+                        return Icon(
+                          index < 4 ? Icons.star : Icons.star_half,
+                          color: Colors.amber,
+                          size: 18,
+                        );
+                      }),
+                    )),
+                  ]),
+                  
+                  const SizedBox(height: 30),
+                  
+                  // Button
+                  ElevatedButton(
+                    onPressed: () {},
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepPurple.shade600,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 50),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      elevation: 2,
+                    ),
+                    child: const Text(
+                      "Confirm Booking",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  // Add bottom padding for scrolling
+                  const SizedBox(height: 30),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCard(List<Widget> children) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.deepPurple.withOpacity(0.15),
+            blurRadius: 20,
+            spreadRadius: -5,
+            offset: const Offset(0, 8),
+          )
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: children,
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String text, {Widget? trailing}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.deepPurple.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: Colors.deepPurple.shade600, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Flexible(
+                child: Text(
+                  text,
+                  style: const TextStyle(
+                    color: Colors.black87,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (trailing != null) trailing,
+      ],
+    );
+  }
+
+  Widget _buildRouteDisplay() {
+    return Row(
+      children: [
+        _buildLocationBadge(widget.fromLocation, true),
+        Expanded(
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                height: 2,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.deepPurple.shade300, Colors.deepPurple.shade400],
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.deepPurple.withOpacity(0.2),
+                      blurRadius: 6,
+                      spreadRadius: -1,
+                    )
+                  ],
+                ),
+                child: Icon(Icons.directions_car, color: Colors.deepPurple.shade400, size: 18),
+              ),
+            ],
+          ),
+        ),
+        _buildLocationBadge(widget.toLocation, false),
+      ],
+    );
+  }
+
+  String getLocationCode(String location) {
+    if (location.isEmpty) return "";
+    
+    final words = location.split(" ");
+    if (words.length >= 2) {
+      String code = "";
+      for (int i = 0; i < 3 && i < words.length; i++) {
+        if (words[i].isNotEmpty) code += words[i][0];
+      }
+      return code.toUpperCase();
+    } 
+    return location.length >= 3 ? location.substring(0, 3).toUpperCase() : location.toUpperCase();
+  }
+
+  Widget _buildLocationBadge(String location, bool isStart) {
+    return Column(
+      children: [
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                isStart ? Colors.deepPurple.shade300 : Colors.deepPurple.shade400,
+                isStart ? Colors.deepPurple.shade400 : Colors.deepPurple.shade600,
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.deepPurple.withOpacity(0.25),
+                blurRadius: 8,
+                spreadRadius: -2,
+              )
+            ],
+          ),
+          child: Center(
+            child: Text(
+              getLocationCode(location),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          location,
+          style: const TextStyle(
+            color: Colors.black87,
+            fontWeight: FontWeight.w500,
+            fontSize: 13,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        Text(
+          isStart ? "Start" : "End",
+          style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDivider() {
+    return Container(
+      height: 1,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.transparent, 
+            Colors.grey.shade300, 
+            Colors.grey.shade300, 
+            Colors.transparent
+          ],
+          stops: const [0.0, 0.2, 0.8, 1.0],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailsSingleLine() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          _buildIconText(Icons.local_parking_rounded, widget.parkingSlot),
+          Container(height: 24, width: 1, color: Colors.grey.shade300),
+          _buildIconText(Icons.access_time_rounded, widget.bookingTime),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildIconText(IconData icon, String text) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.deepPurple.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: Colors.deepPurple.shade600, size: 16),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          text,
+          style: const TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+          ),
+        ),
+      ],
+    );
+  }
+}

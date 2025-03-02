@@ -1,0 +1,1028 @@
+import 'package:flutter/material.dart';
+
+class BookingPage extends StatefulWidget {
+  final String fromLocation;
+  final String toLocation;
+  final String parkingSlot;
+  final String bookingTime;
+  final String vehicleBrand;
+  final String vehicleModel;
+  final String vehicleType;
+  final List<String> parkingImages;
+  final List<VehicleOption> vehicleOptions;
+  final String parkingName;
+  final String parkingAddress;
+  final double parkingRating;
+
+  const BookingPage({
+    super.key,
+    this.fromLocation = "Current Location",
+    this.toLocation = "Destination",
+    this.parkingSlot = "A1",
+    this.bookingTime = "10:30 AM - 12:30 PM",
+    this.vehicleBrand = "Mercedes-Benz",
+    this.vehicleModel = "CL63 AMG",
+    this.vehicleType = "Long coupe",
+    this.parkingImages = const [
+      "https://picsum.photos/800/400",
+      "https://picsum.photos/800/401",
+      "https://picsum.photos/800/402",
+    ],
+    this.vehicleOptions = const [
+      VehicleOption(brand: "Mercedes-Benz", model: "CL63 AMG", type: "Long coupe", isDefault: true),
+      VehicleOption(brand: "BMW", model: "M4 Competition", type: "Sports coupe"),
+      VehicleOption(brand: "Audi", model: "RS7", type: "Sportback"),
+    ],
+    this.parkingName = "Downtown Secure Parking",
+    this.parkingAddress = "123 Main Street, City Center",
+    this.parkingRating = 4.7,
+  });
+
+  @override
+  State<BookingPage> createState() => _BookingPageState();
+}
+
+class VehicleOption {
+  final String brand;
+  final String model;
+  final String type;
+  final bool isDefault;
+  
+  const VehicleOption({
+    required this.brand,
+    required this.model,
+    required this.type,
+    this.isDefault = false,
+  });
+}
+
+class _BookingPageState extends State<BookingPage> with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  late Animation<double> _slideAnimation;
+  final double _maxSlideHeight = 0.735;
+  final double _minSlideHeight = 0.735;
+  int _currentImageIndex = 0;
+  final PageController _imagePageController = PageController();
+  bool _imagesVisible = false;
+  bool _isVehicleMenuExpanded = false;
+  late VehicleOption _selectedVehicle;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    
+    _slideAnimation = Tween<double>(
+      begin: 0.0,
+      end: _maxSlideHeight,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeOutBack,
+    ));
+    
+    _selectedVehicle = widget.vehicleOptions.firstWhere(
+      (vehicle) => vehicle.isDefault, 
+      orElse: () => widget.vehicleOptions.first
+    );
+    
+    Future.delayed(const Duration(milliseconds: 200), () {
+      _animationController.forward().then((_) {
+        setState(() => _imagesVisible = true);
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    _imagePageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey.shade100,
+      appBar: AppBar(
+        title: const Text("Booking Confirmation", 
+          style: TextStyle(fontWeight: FontWeight.w500, color: Colors.black87)),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.black87),
+      ),
+      body: Stack(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Colors.deepPurple.shade50, Colors.grey.shade100],
+              ),
+            ),
+          ),
+          
+          AnimatedOpacity(
+            opacity: _imagesVisible ? 1.0 : 0.0,
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeIn,
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: SizedBox(
+                height: MediaQuery.of(context).size.height * 0.2,
+                child: _buildModernCarousel(),
+              ),
+            ),
+          ),
+          
+          AnimatedBuilder(
+            animation: _slideAnimation,
+            builder: (context, child) {
+              return Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: MediaQuery.of(context).size.height * _slideAnimation.value,
+                child: GestureDetector(
+                  onVerticalDragUpdate: (details) {
+                    double newValue = _slideAnimation.value - (details.delta.dy / MediaQuery.of(context).size.height);
+                    newValue = newValue.clamp(_minSlideHeight, _maxSlideHeight);
+                    _animationController.value = newValue / _maxSlideHeight;
+                  },
+                  onVerticalDragEnd: (details) {
+                    if (_slideAnimation.value < _minSlideHeight) {
+                      _animationController.animateTo(_minSlideHeight / _maxSlideHeight);
+                    }
+                  },
+                  child: child,
+                ),
+              );
+            },
+            child: _buildSlidingPanel(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModernCarousel() {
+    return Stack(
+      children: [
+        PageView.builder(
+          controller: _imagePageController,
+          onPageChanged: (index) => setState(() => _currentImageIndex = index),
+          itemCount: widget.parkingImages.length,
+          itemBuilder: (context, index) {
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 8, spreadRadius: -2)],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.network(
+                  widget.parkingImages[index],
+                  fit: BoxFit.cover,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Center(
+                      child: CircularProgressIndicator(
+                        value: loadingProgress.expectedTotalBytes != null
+                            ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                            : null,
+                        color: Colors.deepPurple.shade400,
+                      ),
+                    );
+                  },
+                  errorBuilder: (_, __, ___) => Container(
+                    color: Colors.grey[200],
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.broken_image, size: 40, color: Colors.grey[600]),
+                        const SizedBox(height: 8),
+                        Text("Image not available", style: TextStyle(color: Colors.grey[600])),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        
+        Positioned(
+          bottom: 12,
+          left: 0,
+          right: 0,
+          child: Center(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              height: 8,
+              child: WaterflowDots(
+                itemCount: widget.parkingImages.length,
+                currentIndex: _currentImageIndex,
+                activeColor: Colors.deepPurple.shade600,
+                inactiveColor: Colors.white.withOpacity(0.6),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSlidingPanel(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(30),
+          topRight: Radius.circular(30),
+        ),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 12, offset: const Offset(0, -2))],
+      ),
+      child: Column(
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 12, bottom: 8),
+            width: 40,
+            height: 5,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                children: [
+                  _buildCard([
+                    _buildRouteDisplay(),
+                    const SizedBox(height: 16),
+                    _buildDottedDivider(),
+                    const SizedBox(height: 12),
+                    _buildDetailsSingleLine(),
+                  ], padding: 16),
+                  
+                  const SizedBox(height: 16),
+                  
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [BoxShadow(color: Colors.deepPurple.withOpacity(0.12), blurRadius: 16, spreadRadius: -4, offset: const Offset(0, 6))],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildInfoRow(
+                                      Icons.directions_car,
+                                      _selectedVehicle.brand,
+                                      trailing: Text(
+                                        _selectedVehicle.model,
+                                        style: TextStyle(
+                                          color: Colors.deepPurple.shade600,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15,
+                                        ),
+                                      ),
+                                    ),
+                                    
+                                    const SizedBox(height: 2),
+                                    
+                                    Padding(
+                                      padding: const EdgeInsets.only(left: 30),
+                                      child: Text(
+                                        _selectedVehicle.type,
+                                        style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              
+                              InkWell(
+                                onTap: () => setState(() => _isVehicleMenuExpanded = !_isVehicleMenuExpanded),
+                                child: Container(
+                                  margin: const EdgeInsets.only(left: 8),
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: _isVehicleMenuExpanded ? Colors.deepPurple.shade200 : Colors.deepPurple.shade100,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    _isVehicleMenuExpanded ? Icons.remove : Icons.add,
+                                    color: Colors.deepPurple.shade700,
+                                    size: 20,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        
+                        AnimatedCrossFade(
+                          firstChild: const SizedBox(height: 0),
+                          secondChild: _buildVehicleSelectionMenu(),
+                          crossFadeState: _isVehicleMenuExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                          duration: const Duration(milliseconds: 300),
+                        ),
+
+                        // Parking details section
+                        _buildParkingDetails(),
+                        
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            children: [
+                              _buildDottedDivider(),
+                              const SizedBox(height: 12),
+                              
+                              _buildInfoRow(
+                                Icons.event_available,
+                                "Available Now",
+                                trailing: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: Colors.green.shade100,
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: Text(
+                                    "Ready",
+                                    style: TextStyle(
+                                      color: Colors.green.shade800,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 24),
+                  
+                  ElevatedButton(
+                    onPressed: () {},
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepPurple.shade600,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 48),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      elevation: 2,
+                    ),
+                    child: const Text(
+                      "Confirm Booking",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildParkingDetails() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildDottedDivider(),
+          const SizedBox(height: 16),
+          
+          // Parking header label
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.deepPurple.shade50,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              "Parking Area",
+              style: TextStyle(
+                color: Colors.deepPurple.shade800,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+          ),
+          
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Small parking image
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.network(
+                  "https://picsum.photos/100/100", // Small image of parking
+                  width: 70,
+                  height: 70,
+                  fit: BoxFit.cover,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Container(
+                      width: 70,
+                      height: 70,
+                      color: Colors.grey.shade200,
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          value: loadingProgress.expectedTotalBytes != null
+                              ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                              : null,
+                          strokeWidth: 2,
+                          color: Colors.deepPurple.shade400,
+                        ),
+                      ),
+                    );
+                  },
+                  errorBuilder: (_, __, ___) => Container(
+                    width: 70,
+                    height: 70,
+                    color: Colors.grey.shade200,
+                    child: Icon(Icons.image_not_supported, color: Colors.grey.shade500),
+                  ),
+                ),
+              ),
+              
+              const SizedBox(width: 16),
+              
+              // Parking details
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.parkingName,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 4),
+                    
+                    Text(
+                      widget.parkingAddress,
+                      style: TextStyle(
+                        color: Colors.grey.shade700,
+                        fontSize: 13,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    
+                    const SizedBox(height: 6),
+                    
+                    // Rating
+                    Row(
+                      children: [
+                        Icon(Icons.star, color: Colors.amber, size: 16),
+                        const SizedBox(width: 4),
+                        Text(
+                          widget.parkingRating.toString(),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          "(${(widget.parkingRating * 100).toInt()} reviews)",
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Amenities row
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            child: Row(
+              children: [
+                _buildAmenityBadge(Icons.security, "24/7 Security"),
+                _buildAmenityBadge(Icons.wheelchair_pickup, "Accessible"),
+                _buildAmenityBadge(Icons.camera_alt, "CCTV"),
+                _buildAmenityBadge(Icons.family_restroom, "Family Friendly"),
+                _buildAmenityBadge(Icons.lightbulb, "Well Lit"),
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAmenityBadge(IconData icon, String text) {
+    return Container(
+      margin: const EdgeInsets.only(right: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: Colors.deepPurple.shade500),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey.shade800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVehicleSelectionMenu() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.deepPurple.shade50,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              "Suggested Vehicles",
+              style: TextStyle(
+                color: Colors.deepPurple.shade800,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+          ),
+          
+          ...widget.vehicleOptions.map((vehicle) => _buildVehicleOption(vehicle)),
+          
+          _buildDottedDivider(),
+          const SizedBox(height: 12),
+          
+          InkWell(
+            onTap: () => setState(() => _isVehicleMenuExpanded = false),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.deepPurple.shade100,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.add_circle_outline,
+                      color: Colors.deepPurple.shade700,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    "Add New Vehicle",
+                    style: TextStyle(
+                      color: Colors.deepPurple.shade700,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVehicleOption(VehicleOption vehicle) {
+    final isSelected = vehicle.brand == _selectedVehicle.brand && 
+                       vehicle.model == _selectedVehicle.model;
+                       
+    return InkWell(
+      onTap: () => setState(() {
+        _selectedVehicle = vehicle;
+        _isVehicleMenuExpanded = false;
+      }),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.deepPurple.shade50 : Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? Colors.deepPurple.shade200 : Colors.grey.shade200,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              height: 20,
+              width: 20,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isSelected ? Colors.deepPurple.shade600 : Colors.transparent,
+                border: Border.all(
+                  color: isSelected ? Colors.deepPurple.shade600 : Colors.grey.shade400,
+                  width: 2,
+                ),
+              ),
+              child: isSelected ? const Icon(Icons.check, size: 14, color: Colors.white) : null,
+            ),
+            const SizedBox(width: 12),
+            
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        vehicle.brand,
+                        style: const TextStyle(
+                          color: Colors.black87,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                        ),
+                      ),
+                      Text(
+                        vehicle.model,
+                        style: TextStyle(
+                          color: Colors.deepPurple.shade600,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    vehicle.type,
+                    style: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCard(List<Widget> children, {double padding = 20}) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(padding),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.deepPurple.withOpacity(0.12),
+            blurRadius: 16,
+            spreadRadius: -4,
+            offset: const Offset(0, 6),
+          )
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: children,
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String text, {Widget? trailing}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: Colors.deepPurple.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: Colors.deepPurple.shade600, size: 16),
+              ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  text,
+                  style: const TextStyle(
+                    color: Colors.black87,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (trailing != null) trailing,
+      ],
+    );
+  }
+
+  Widget _buildRouteDisplay() {
+    return Row(
+      children: [
+        _buildLocationBadge(widget.fromLocation, true),
+        Expanded(
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              CustomPaint(
+                size: const Size(double.infinity, 2),
+                painter: DottedLinePainter(
+                  color: Colors.deepPurple.shade400,
+                  dashWidth: 5,
+                  dashSpace: 3,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.deepPurple.withOpacity(0.2),
+                      blurRadius: 6,
+                      spreadRadius: -1,
+                    )
+                  ],
+                ),
+                child: Icon(Icons.directions_car, color: Colors.deepPurple.shade400, size: 16),
+              ),
+            ],
+          ),
+        ),
+        _buildLocationBadge(widget.toLocation, false),
+      ],
+    );
+  }
+
+  String getLocationCode(String location) {
+    if (location.isEmpty) return "";
+    
+    final words = location.split(" ");
+    if (words.length >= 2) {
+      String code = "";
+      for (int i = 0; i < 3 && i < words.length; i++) {
+        if (words[i].isNotEmpty) code += words[i][0];
+      }
+      return code.toUpperCase();
+    } 
+    return location.length >= 3 ? location.substring(0, 3).toUpperCase() : location.toUpperCase();
+  }
+
+  Widget _buildLocationBadge(String location, bool isStart) {
+    return Column(
+      children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                isStart ? Colors.deepPurple.shade300 : Colors.deepPurple.shade400,
+                isStart ? Colors.deepPurple.shade400 : Colors.deepPurple.shade600,
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.deepPurple.withOpacity(0.25),
+                blurRadius: 8,
+                spreadRadius: -2,
+              )
+            ],
+          ),
+          child: Center(
+            child: Text(
+              getLocationCode(location),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          location,
+          style: const TextStyle(
+            color: Colors.black87,
+            fontWeight: FontWeight.w500,
+            fontSize: 12,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        Text(
+          isStart ? "Start" : "End",
+          style: TextStyle(color: Colors.grey.shade600, fontSize: 10),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDottedDivider() {
+    return SizedBox(
+      height: 1,
+      child: CustomPaint(
+        size: const Size(double.infinity, 1),
+        painter: DottedLinePainter(
+          color: Colors.grey.shade300,
+          dashWidth: 6,
+          dashSpace: 4,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailsSingleLine() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          _buildIconText(Icons.local_parking_rounded, widget.parkingSlot),
+          Container(height: 24, width: 1, color: Colors.grey.shade300),
+          _buildIconText(Icons.access_time_rounded, widget.bookingTime),
+        ],
+      ),
+    );
+  }
+  
+ Widget _buildIconText(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: Colors.deepPurple.shade600),
+        const SizedBox(width: 8),
+        Text(
+          text,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: Colors.black87,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class DottedLinePainter extends CustomPainter {
+  final Color color;
+  final double dashWidth;
+  final double dashSpace;
+
+  DottedLinePainter({
+    required this.color,
+    required this.dashWidth,
+    required this.dashSpace,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    double startX = 0;
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = size.height
+      ..strokeCap = StrokeCap.round;
+
+    while (startX < size.width) {
+      canvas.drawLine(
+        Offset(startX, size.height / 2),
+        Offset(startX + dashWidth, size.height / 2),
+        paint,
+      );
+      startX += dashWidth + dashSpace;
+    }
+  }
+
+  @override
+  bool shouldRepaint(DottedLinePainter oldDelegate) =>
+      oldDelegate.color != color ||
+      oldDelegate.dashWidth != dashWidth ||
+      oldDelegate.dashSpace != dashSpace;
+}
+
+class WaterflowDots extends StatelessWidget {
+  final int itemCount;
+  final int currentIndex;
+  final Color activeColor;
+  final Color inactiveColor;
+  final double dotSize;
+  final double spacing;
+
+  const WaterflowDots({
+    Key? key,
+    required this.itemCount,
+    required this.currentIndex,
+    required this.activeColor,
+    required this.inactiveColor,
+    this.dotSize = 8.0,
+    this.spacing = 5.0,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(
+        itemCount,
+        (index) => Container(
+          margin: EdgeInsets.symmetric(horizontal: spacing / 2),
+          width: index == currentIndex ? dotSize * 2 : dotSize,
+          height: dotSize,
+          decoration: BoxDecoration(
+            color: index == currentIndex ? activeColor : inactiveColor,
+            borderRadius: BorderRadius.circular(dotSize / 2),
+            boxShadow: index == currentIndex
+                ? [
+                    BoxShadow(
+                      color: activeColor.withOpacity(0.5),
+                      blurRadius: 4,
+                      spreadRadius: 1,
+                    )
+                  ]
+                : null,
+          ),
+        ),
+      ),
+    );
+  }
+}
